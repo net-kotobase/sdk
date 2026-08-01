@@ -2,6 +2,7 @@ export type QueryLanguage =
   | "datalog"
   | "cypher"
   | "gremlin"
+  | "graphdb"
   | "graphql"
   | "sparql";
 
@@ -175,6 +176,10 @@ export class KotobaseClient {
 
   graphql<T = JsonValue>(query: string, options: RequestOptions = {}) {
     return this.query<T>(buildRequest("graphql", query, options), options);
+  }
+
+  graphdb<T = JsonValue>(query: string, options: RequestOptions = {}) {
+    return this.query<T>(buildRequest("graphdb", query, options), options);
   }
 
   sparql<T = JsonValue>(query: string, options: RequestOptions = {}) {

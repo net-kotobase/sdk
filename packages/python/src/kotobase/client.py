@@ -136,6 +136,9 @@ class KotobaseClient:
     def graphql(self, query: str, **kwargs: Json) -> QueryResult:
         return self.query("graphql", query, **kwargs)
 
+    def graphdb(self, query: str, **kwargs: Json) -> QueryResult:
+        return self.query("graphdb", query, **kwargs)
+
     def sparql(self, query: str, **kwargs: Json) -> QueryResult:
         return self.query("sparql", query, **kwargs)
 
@@ -144,7 +147,7 @@ class KotobaseClient:
 
 
 def _validate_query(language: str, query: Union[str, GremlinBytecode]) -> None:
-    languages = {"datalog", "cypher", "gremlin", "graphql", "sparql"}
+    languages = {"datalog", "cypher", "gremlin", "graphdb", "graphql", "sparql"}
     if language not in languages:
         raise ValueError("unsupported query language: " + language)
     if language == "gremlin":

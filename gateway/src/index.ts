@@ -1,5 +1,5 @@
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
-type QueryLanguage = "datalog" | "cypher" | "gremlin" | "graphql" | "sparql";
+type QueryLanguage = "datalog" | "cypher" | "gremlin" | "graphdb" | "graphql" | "sparql";
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 interface QueryRequest {
@@ -25,10 +25,10 @@ interface UpstreamResult {
 
 const PATH = "/xrpc/ai.gftd.apps.kotobase.query.execute";
 const MAX_BODY_BYTES = 131_072;
-const LANGUAGES = new Set<QueryLanguage>(["datalog", "cypher", "gremlin", "graphql", "sparql"]);
+const LANGUAGES = new Set<QueryLanguage>(["datalog", "cypher", "gremlin", "graphdb", "graphql", "sparql"]);
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "authorization, content-type, x-kotoba-did, x-request-id",
   "access-control-max-age": "86400",
 };
@@ -38,6 +38,9 @@ export function createHandler(fetcher: Fetcher = fetch) {
     const started = Date.now();
     const requestId = safeRequestId(request.headers.get("x-request-id")) ?? `kotobase-query-${crypto.randomUUID()}`;
     const url = new URL(request.url);
+    if (url.hostname === "graphdb.kotobase.net") {
+      return handleGraphDbProtocol(fetcher, request, url, requestId);
+    }
     if (url.pathname !== PATH) return errorResponse(404, "not_found", "Not found", false, requestId);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: responseHeaders(requestId) });
     if (request.method !== "POST") return errorResponse(405, "method_not_allowed", "POST required", false, requestId);
@@ -89,6 +92,96 @@ export function createHandler(fetcher: Fetcher = fetch) {
 
 export default { fetch: createHandler() };
 
+async function handleGraphDbProtocol(
+  fetcher: Fetcher,
+  request: Request,
+  url: URL,
+  requestId: string,
+): Promise<Response> {
+  if (url.pathname === "/health" && request.method === "GET") {
+    return jsonResponse(200, {
+      ok: true,
+      service: "graphdb-rdf4j-query-compatible",
+      repositories: ["default"],
+      readOnly: true,
+    }, requestId);
+  }
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: responseHeaders(requestId) });
+  }
+  const match = /^\/repositories\/([^/]+)$/.exec(url.pathname);
+  if (!match) return errorResponse(404, "not_found", "Repository query endpoint not found", false, requestId);
+  let repository: string;
+  try {
+    repository = decodeURIComponent(match[1] ?? "");
+  } catch {
+    return errorResponse(400, "invalid_repository", "Invalid repository identifier", false, requestId);
+  }
+  if (repository !== "default") {
+    return errorResponse(404, "repository_unavailable", "Only the default repository is currently available", false, requestId);
+  }
+  if (!hasCredential(request)) return errorResponse(401, "unauthorized", "Authentication required", false, requestId);
+
+  let query: string | null = null;
+  if (request.method === "GET") {
+    query = url.searchParams.get("query");
+  } else if (request.method === "POST") {
+    const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    if (contentType === "application/sparql-query") {
+      query = await request.text();
+    } else if (contentType === "application/x-www-form-urlencoded") {
+      query = new URLSearchParams(await request.text()).get("query");
+    } else {
+      return errorResponse(415, "unsupported_media_type", "Use application/sparql-query or application/x-www-form-urlencoded", false, requestId);
+    }
+  } else {
+    return errorResponse(405, "method_not_allowed", "GET or POST required", false, requestId);
+  }
+  if (!query?.trim()) return errorResponse(400, "invalid_request", "SPARQL query is required", false, requestId);
+  if (new TextEncoder().encode(query).byteLength > MAX_BODY_BYTES) {
+    return errorResponse(413, "request_too_large", "SPARQL query exceeds 128 KiB", false, requestId);
+  }
+
+  const headers = forwardedHeaders(request, requestId);
+  headers.set("content-type", "application/sparql-query; charset=utf-8");
+  headers.set("accept", request.headers.get("accept") || "application/sparql-results+json");
+  let upstream: Response;
+  try {
+    upstream = await fetcher("https://sparql.kotobase.net/sparql", {
+      method: "POST",
+      headers,
+      body: query,
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    return errorResponse(503, "engine_unavailable", "GraphDB-compatible query engine is unavailable", true, requestId);
+  }
+  if (upstream.status >= 500) {
+    return errorResponse(503, "engine_unavailable", "GraphDB-compatible query engine is unavailable", true, requestId);
+  }
+  if (!upstream.ok) {
+    const code = upstream.status === 401 ? "unauthorized"
+      : upstream.status === 403 ? "forbidden"
+      : upstream.status === 429 ? "rate_limited"
+      : "query_execution_failed";
+    const message = upstream.status === 401 ? "GraphDB query authentication failed"
+      : upstream.status === 403 ? "GraphDB query is forbidden"
+      : upstream.status === 429 ? "GraphDB query rate limit exceeded"
+      : "GraphDB-compatible SPARQL query was rejected";
+    return errorResponse(upstream.status, code, message, upstream.status === 429, requestId);
+  }
+  const response = new Response(upstream.body, { status: upstream.status });
+  const contentType = upstream.headers.get("content-type");
+  if (contentType) response.headers.set("content-type", contentType);
+  for (const [name, value] of responseHeaders(requestId)) {
+    response.headers.set(name, value);
+  }
+  if (contentType) response.headers.set("content-type", contentType);
+  response.headers.set("x-kotobase-repository", repository);
+  response.headers.set("x-kotobase-compatibility", "graphdb-rdf4j-query-subset");
+  return response;
+}
+
 async function dispatch(
   fetcher: Fetcher,
   incoming: Request,
@@ -134,6 +227,9 @@ function upstreamRequest(incoming: Request, input: QueryRequest, requestId: stri
       query: input.query,
       variables: input.parameters ?? {},
     }, timeout);
+  }
+  if (input.language === "graphdb" && input.database && input.database !== "default") {
+    throw new GatewayError(501, "repository_unavailable", "Only the default GraphDB repository is currently available", false);
   }
   headers.set("content-type", "application/sparql-query; charset=utf-8");
   headers.set("accept", "application/sparql-results+json");
@@ -229,7 +325,10 @@ function normalize(language: QueryLanguage, value: unknown): UpstreamResult {
   if (language === "graphql" && Array.isArray(object.errors) && object.data === undefined) {
     throw new GatewayError(400, "query_execution_failed", "GraphQL query failed", false, object.errors as Json);
   }
-  return { data: value as Json };
+  return {
+    data: value as Json,
+    ...(language === "graphdb" ? { meta: { repository: "default", protocol: "rdf4j-rest-query-subset" } } : {}),
+  };
 }
 
 function validateRequest(value: unknown): QueryRequest {
@@ -309,6 +408,7 @@ function engineName(language: QueryLanguage): string {
     datalog: "kotobase-datomic",
     cypher: "org-opencypher-cypher",
     gremlin: "org-apache-tinkerpop-gremlin",
+    graphdb: "graphdb-rdf4j-query-compatible",
     graphql: "org-graphql-http",
     sparql: "org-w3-sparql-protocol",
   })[language];

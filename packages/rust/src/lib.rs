@@ -13,6 +13,7 @@ pub enum QueryLanguage {
     Datalog,
     Cypher,
     Gremlin,
+    Graphdb,
     Graphql,
     Sparql,
 }
@@ -177,6 +178,10 @@ impl KotobaseClient {
         self.text_query(QueryLanguage::Graphql, query.into(), options).await
     }
 
+    pub async fn graphdb(&self, query: impl Into<String>, options: RequestOptions) -> Result<QueryResult, KotobaseError> {
+        self.text_query(QueryLanguage::Graphdb, query.into(), options).await
+    }
+
     pub async fn sparql(&self, query: impl Into<String>, options: RequestOptions) -> Result<QueryResult, KotobaseError> {
         self.text_query(QueryLanguage::Sparql, query.into(), options).await
     }
@@ -267,5 +272,17 @@ mod tests {
             options: None,
         };
         assert_eq!(validate_request(&request).unwrap_err().code, "invalid_request");
+    }
+
+    #[test]
+    fn graphdb_serializes_as_a_distinct_language() {
+        let request = build_request(
+            QueryLanguage::Graphdb,
+            QueryDocument::Text("SELECT ?s WHERE { ?s ?p ?o }".into()),
+            RequestOptions { database: Some("default".into()), ..Default::default() },
+        );
+        let value = serde_json::to_value(request).unwrap();
+        assert_eq!(value["language"], "graphdb");
+        assert_eq!(value["database"], "default");
     }
 }

@@ -61,3 +61,24 @@ test("structured errors become KotobaseError", async () => {
       error.code === "engine_unavailable" && error.status === 503 && error.retryable,
   );
 });
+
+test("graphdb sends SPARQL with a repository name", async () => {
+  let captured: TransportRequest | undefined;
+  const client = new KotobaseClient({
+    transport: async (request) => {
+      captured = request;
+      return Response.json({
+        ok: true,
+        language: "graphdb",
+        data: { head: { vars: ["s"] }, results: { bindings: [] } },
+        meta: { requestId: "req-graphdb", elapsedMs: 1 },
+      });
+    },
+  });
+  await client.graphdb("SELECT ?s WHERE { ?s ?p ?o }", { database: "default" });
+  assert.deepEqual(JSON.parse(captured?.body ?? ""), {
+    language: "graphdb",
+    query: "SELECT ?s WHERE { ?s ?p ?o }",
+    database: "default",
+  });
+});
