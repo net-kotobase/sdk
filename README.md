@@ -70,6 +70,7 @@ var_dump($result->data);
 | `packages/python` | Python 3.9+ client |
 | `packages/rust` | Async Rust client |
 | `packages/php` | PHP 8.1+ client |
+| `gateway` | Cloudflare Worker dispatching the unified endpoint |
 | `docs/adr` | Architecture decisions and server integration plan |
 
 ## Wire endpoint
@@ -79,7 +80,7 @@ All clients call:
 ```text
 POST /xrpc/ai.gftd.apps.kotobase.query.execute
 Content-Type: application/json
-Authorization: Bearer <token>       # optional for public graphs
+Authorization: Bearer <token>
 ```
 
 See [`spec/openapi.yaml`](spec/openapi.yaml) for request, result, and error
@@ -88,11 +89,16 @@ shapes. Servers that have not installed the query gateway will return a normal
 
 ## Status
 
-This repository defines and implements the portable client boundary. The
-Kotobase edge still needs to mount `query.execute` and dispatch it to the
-existing protocol implementations before the public endpoint is live; see
+The portable clients and the separately deployed query gateway live here.
+The gateway owns only the exact `query.execute` route and dispatches to the
+existing, independently deployed query engines; see
 [`ADR-0001`](docs/adr/0001-unified-query-envelope.md).
+
+Production route: `https://kotobase.net/xrpc/ai.gftd.apps.kotobase.query.execute`.
+The gateway requires an existing Kotobase credential and was deployed on
+2026-08-01 as Cloudflare Worker `net-kotobase-query-gateway`.
 
 ## License
 
-Apache-2.0
+[Apache License 2.0](LICENSE). Package manifests use the SPDX identifier
+`Apache-2.0`, and the repository includes the complete official license text.

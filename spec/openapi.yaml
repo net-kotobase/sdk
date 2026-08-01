@@ -12,7 +12,6 @@ paths:
       summary: Execute a native query against a Kotobase graph
       security:
         - bearerAuth: []
-        - {}
       parameters:
         - in: header
           name: x-request-id

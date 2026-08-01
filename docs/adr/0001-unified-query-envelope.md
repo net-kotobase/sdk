@@ -1,6 +1,6 @@
 # ADR-0001: Unified polyglot query envelope
 
-- Status: Accepted
+- Status: Accepted and deployed
 - Date: 2026-08-01
 
 ## Context
@@ -70,3 +70,17 @@ language. Native protocol compatibility endpoints may continue to exist for
 specialized drivers. The common client surface intentionally exposes the
 engine-native result under `data`; forcing GraphQL objects, SPARQL bindings,
 Cypher rows, and Gremlin values into one fake table would lose information.
+
+## Deployment record
+
+The gateway was deployed on 2026-08-01 as Cloudflare Worker
+`net-kotobase-query-gateway`, owning only the exact route
+`kotobase.net/xrpc/ai.gftd.apps.kotobase.query.execute`. Initial production
+version: `f84bad87-5aca-4505-90bf-d96947552a4c`.
+Current verified version after 5xx sanitization:
+`cc723493-15e0-4b24-83e5-179343fade65`.
+
+Cypher, Gremlin, and SPARQL protocol hosts were live at deployment time.
+Datalog dispatches through the existing tenant-scoped apex `datomic.q` route.
+The GraphQL hostname was not yet resolvable, so GraphQL calls fail explicitly
+with `engine_unavailable` until that independent surface is deployed.
