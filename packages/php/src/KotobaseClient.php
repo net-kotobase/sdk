@@ -107,6 +107,12 @@ final class KotobaseClient
     }
 
     /** @param array<string,mixed> $options */
+    public function graphdb(string $query, array $options = []): QueryResult
+    {
+        return $this->textQuery('graphdb', $query, $options);
+    }
+
+    /** @param array<string,mixed> $options */
     public function sparql(string $query, array $options = []): QueryResult
     {
         return $this->textQuery('sparql', $query, $options);
@@ -139,7 +145,7 @@ final class KotobaseClient
     /** @param array<string,mixed> $request */
     private static function validateRequest(array $request): void
     {
-        $languages = ['datalog', 'cypher', 'gremlin', 'graphql', 'sparql'];
+        $languages = ['datalog', 'cypher', 'gremlin', 'graphdb', 'graphql', 'sparql'];
         $language = $request['language'] ?? null;
         $query = $request['query'] ?? null;
         if (!is_string($language) || !in_array($language, $languages, true)) {

@@ -8,6 +8,10 @@
     {
       "pattern": "kotobase.net/xrpc/ai.gftd.apps.kotobase.query.execute",
       "zone_name": "kotobase.net"
+    },
+    {
+      "pattern": "graphdb.kotobase.net",
+      "custom_domain": true
     }
   ],
   "observability": {

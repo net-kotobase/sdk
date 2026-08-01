@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Kotobase Unified Query API
-  version: 0.1.0
+  version: 0.2.0
   description: A read-only, language-neutral envelope around Kotobase query engines.
 servers:
   - url: https://kotobase.net
@@ -50,7 +50,7 @@ components:
   schemas:
     QueryLanguage:
       type: string
-      enum: [datalog, cypher, gremlin, graphql, sparql]
+      enum: [datalog, cypher, gremlin, graphdb, graphql, sparql]
     GremlinBytecode:
       type: array
       minItems: 1
@@ -71,7 +71,11 @@ components:
         parameters:
           type: object
           additionalProperties: true
-        database: { type: string, minLength: 1, maxLength: 256 }
+        database:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Database or repository identifier. GraphDB currently supports only default.
         collections:
           type: array
           maxItems: 128

@@ -45,6 +45,18 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, "engine_unavailable")
         self.assertTrue(caught.exception.retryable)
 
+    def test_graphdb_repository(self):
+        captured = {}
+
+        def transport(_url, _headers, body, _timeout):
+            captured.update(json.loads(body))
+            return 200, b'{"ok":true,"language":"graphdb","data":{"results":{"bindings":[]}},"meta":{"requestId":"r","elapsedMs":1}}'
+
+        client = KotobaseClient(transport=transport)
+        client.graphdb("SELECT ?s WHERE { ?s ?p ?o }", database="default")
+        self.assertEqual(captured["language"], "graphdb")
+        self.assertEqual(captured["database"], "default")
+
 
 if __name__ == "__main__":
     unittest.main()

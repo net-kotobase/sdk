@@ -2,12 +2,13 @@
 
 One query client for Kotobase from TypeScript, Python, Rust, and PHP.
 
-The SDKs share one wire contract and expose the same five read-only query
+The SDKs share one wire contract and expose the same six read-only query
 families:
 
 - Datomic-shaped Datalog
 - openCypher
 - Apache TinkerPop Gremlin bytecode
+- Ontotext GraphDB/RDF4J read-query compatibility
 - GraphQL
 - SPARQL
 
@@ -40,6 +41,15 @@ result = db.sparql("SELECT ?s WHERE { ?s <urn:kotobase:role> \"admin\" }")
 print(result.data)
 ```
 
+```python
+# GraphDB queries are SPARQL. The initial deployment mounts the read-only
+# repository named "default".
+result = db.graphdb(
+    "SELECT ?s WHERE { ?s ?p ?o } LIMIT 10",
+    database="default",
+)
+```
+
 ```rust
 use net_kotobase::{KotobaseClient, RequestOptions};
 
@@ -66,6 +76,7 @@ var_dump($result->data);
 | Path | Purpose |
 |---|---|
 | `spec/openapi.yaml` | Authoritative `query.execute` HTTP contract |
+| `spec/graphdb-openapi.yaml` | Native GraphDB/RDF4J query subset contract |
 | `packages/typescript` | Browser, Node.js, Deno, and edge client |
 | `packages/python` | Python 3.9+ client |
 | `packages/rust` | Async Rust client |
@@ -97,6 +108,12 @@ existing, independently deployed query engines; see
 Production route: `https://kotobase.net/xrpc/ai.gftd.apps.kotobase.query.execute`.
 The gateway requires an existing Kotobase credential and was deployed on
 2026-08-01 as Cloudflare Worker `net-kotobase-query-gateway`.
+
+GraphDB-compatible clients can use
+`https://graphdb.kotobase.net/repositories/default`. This is a read-only RDF4J
+query endpoint subset, not compatibility with GraphDB management, updates,
+inference configuration, plugins, or Workbench APIs. See
+[`ADR-0002`](docs/adr/0002-graphdb-query-compatibility.md).
 
 ## License
 
