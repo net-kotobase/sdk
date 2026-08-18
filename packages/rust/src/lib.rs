@@ -1,5 +1,7 @@
 //! Async Rust client for the Kotobase unified query envelope.
 
+pub mod merge;
+
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
